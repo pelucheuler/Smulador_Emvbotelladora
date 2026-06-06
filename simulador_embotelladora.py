@@ -118,13 +118,12 @@ def render_scada_continuo(v, m, is_es):
     return svg
 
 # ==========================================
-# 3. INICIALIZACIÓN DE ESTADO
+# 3. INICIALIZACIÓN DE ESTADO ROBUSTA
 # ==========================================
 if 'sim_active' not in st.session_state:
     st.session_state.update({
         'sim_active': False, 'login': False, 'nombre': '', 'lang': 'es',
         'last_time': time.time(), 'tiempo_simulado': 0, 'mutiplicador_tiempo': 1,
-        'last_log_time': -1, 'historico': [],  # DATASET CRÍTICO DE TIME-SERIES PARA POWER BI
         'vars': {
             'main_pwr': False, 'agitador': False, 'banda': False,
             'v_agua': 0, 'v_conc': 0, 'v_vapor': 0, 'bpm': 0,
@@ -135,6 +134,11 @@ if 'sim_active' not in st.session_state:
             'perturbacion': 1.0 
         }
     })
+
+# Seguro Anti-Caché: Forzamos la inicialización de variables de registro
+if 'last_log_time' not in st.session_state:
+    st.session_state.last_log_time = -1
+    st.session_state.historico = []
 
 is_es = st.session_state.lang == 'es'
 
@@ -176,9 +180,9 @@ if st.session_state.sim_active:
         if random.random() < 0.1: 
             m['perturbacion'] = random.uniform(0.9, 1.1)
 
-        # Llenado y vaciado
-        flujo_in_agua = (v['v_agua'] / 100.0) * 1.5 * m['perturbacion'] * dt_sim
-        flujo_in_conc = (v['v_conc'] / 100.0) * 0.5 * m['perturbacion'] * dt_sim
+        # Llenado y vaciado (Constantes de flujo ajustadas para control humano)
+        flujo_in_agua = (v['v_agua'] / 100.0) * 0.15 * m['perturbacion'] * dt_sim
+        flujo_in_conc = (v['v_conc'] / 100.0) * 0.05 * m['perturbacion'] * dt_sim
         flujo_out = (v['bpm'] / 60.0) * 0.5 * dt_sim if v['banda'] and v['nivel'] > 0 else 0
         
         v['masa_agua'] += flujo_in_agua - (flujo_out * (v['masa_agua']/(v['nivel']+0.1)))
