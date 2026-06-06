@@ -180,7 +180,7 @@ if st.session_state.sim_active:
             m['perturbacion'] = random.uniform(0.9, 1.1)
 
         # Llenado y vaciado
-        flujo_in_agua = (v['v_agua'] / 100.0) * 0.05 m['perturbacion'] * dt_sim
+        flujo_in_agua = (v['v_agua'] / 100.0) * 0.05* m['perturbacion'] * dt_sim
         flujo_in_conc = (v['v_conc'] / 100.0) * 0.01* m['perturbacion'] * dt_sim
         flujo_out = (v['bpm'] / 60.0) * 0.5 * dt_sim if v['banda'] and v['nivel'] > 0 else 0
         
