@@ -124,7 +124,7 @@ if 'sim_active' not in st.session_state:
     st.session_state.update({
         'sim_active': False, 'login': False, 'nombre': '', 'lang': 'es',
         'last_time': time.time(), 'tiempo_simulado': 0, 'mutiplicador_tiempo': 1,
-        'last_log_time': -1, 'historico': [],  # DATASET CRÍTICO DE TIME-SERIES PARA POWER BI
+        'last_log_time': -1, 'historico': [],
         'vars': {
             'main_pwr': False, 'agitador': False, 'banda': False,
             'v_agua': 0, 'v_conc': 0, 'v_vapor': 0, 'bpm': 0,
@@ -136,7 +136,6 @@ if 'sim_active' not in st.session_state:
         }
     })
 
-# Seguro Anti-Caché: Forzamos la inicialización de variables de registro
 if 'last_log_time' not in st.session_state:
     st.session_state.last_log_time = -1
     st.session_state.historico = []
@@ -165,7 +164,6 @@ if not st.session_state.login:
 # 5. LÓGICA DE FÍSICA Y TIEMPO REAL
 # ==========================================
 if st.session_state.sim_active:
-    time.sleep(1.0) # ESTABILIZADOR INCREMENTADO: Menos recargas por segundo, más estabilidad
     
     now = time.time()
     dt_real = now - st.session_state.last_time
@@ -181,7 +179,7 @@ if st.session_state.sim_active:
         if random.random() < 0.1: 
             m['perturbacion'] = random.uniform(0.9, 1.1)
 
-        # Llenado y vaciado (Constantes de flujo ajustadas para control humano)
+        # Llenado y vaciado
         flujo_in_agua = (v['v_agua'] / 100.0) * 0.15 * m['perturbacion'] * dt_sim
         flujo_in_conc = (v['v_conc'] / 100.0) * 0.05 * m['perturbacion'] * dt_sim
         flujo_out = (v['bpm'] / 60.0) * 0.5 * dt_sim if v['banda'] and v['nivel'] > 0 else 0
@@ -193,6 +191,12 @@ if st.session_state.sim_active:
         v['masa_conc'] = max(0.0, v['masa_conc'])
         v['nivel'] = v['masa_agua'] + v['masa_conc']
         
+        # Seguro anti-vacío absoluto
+        if v['nivel'] <= 0.1:
+             v['nivel'] = 0.0
+             v['masa_agua'] = 0.0
+             v['masa_conc'] = 0.0
+        
         # Alarma de desborde
         if v['nivel'] > 100:
             m['seg_fallos'] += 1
@@ -202,15 +206,14 @@ if st.session_state.sim_active:
             v['masa_agua'] = 100.0 * prop_agua
             v['masa_conc'] = 100.0 * prop_conc
 
-        # Lógica Brix (Seguro contra negativos y divisiones inestables)
+        # Lógica Brix
         if v['nivel'] > 0.1:
             brix_teorico = (v['masa_conc'] / v['nivel']) * 60.0
             if v['agitador']:
                 v['brix'] += (brix_teorico - v['brix']) * 0.1 * dt_sim
         else:
-            v['brix'] = 0.0 # Se fuerza a cero si el tanque está vacío
+            v['brix'] = 0.0
             
-        # Seguro anti-negativos definitivo
         if v['brix'] < 0:
             v['brix'] = 0.0
 
@@ -236,7 +239,6 @@ if st.session_state.sim_active:
 
         # REGISTRO HISTÓRICO TIME-SERIES PARA ANÁLISIS EN POWER BI
         current_sec = int(st.session_state.tiempo_simulado)
-        # Cambio: Registramos en un rango de tiempo mayor (cada 10 segundos simulados) para no saturar el historial
         if current_sec % 10 == 0 and current_sec != st.session_state.last_log_time:
             st.session_state.last_log_time = current_sec
             st.session_state.historico.append({
@@ -294,7 +296,7 @@ c3.metric("Fallos Operativos", m['op_fallos'])
 c4.metric("Errores Seguridad", m['seg_fallos'])
 
 # ==========================================
-# BUCLE DE REFRESCO (TIEMPO REAL)
+# BUCLE DE REFRESCO ESTABILIZADO
 # ==========================================
 if st.session_state.sim_active:
     t_total = max(1.0, st.session_state.tiempo_simulado)
@@ -307,24 +309,23 @@ if st.session_state.sim_active:
     if int(st.session_state.tiempo_simulado) % 5 == 0:
         push_to_power_bi({'oee': oee_live, 'brix': v['brix'], 'temp': v['temp'], 'ok': m['ok'], 'malas': m['malas']})
 
+    # LA SOLUCIÓN: Pausa larga justo antes de reiniciar el bucle
+    time.sleep(3.0) 
     st.rerun()
 else:
     if st.session_state.login:
         st.error("🚨 TURNO DE TRABAJO FINALIZADO POR EL OPERADOR 🚨")
         st.markdown("### 📊 REPORTE DE RENDIMIENTO INDUSTRIAL")
         
-        # Tabla resumen macro
         df_summary = pd.DataFrame([{"Operador": st.session_state.nombre, "Botellas_OK": int(m['ok']), "Defectos": int(m['malas']), "Fallos": m['op_fallos']}])
         st.dataframe(df_summary)
         
-        # SECCIÓN REQUERIDA: DATASET TIME-SERIES COMPLETO PARA POWER BI
         if st.session_state.historico:
             st.markdown("### 📈 DATASET HISTÓRICO GENERADO (Para análisis temporal en Power BI)")
             df_full = pd.DataFrame(st.session_state.historico)
             st.write(f"Filas totales registradas durante el turno: {len(df_full)}")
-            st.dataframe(df_full.tail(10)) # Muestra vista previa del final del turno
+            st.dataframe(df_full.tail(10)) 
             
-            # Botón de descarga real del .CSV
             csv_bytes = df_full.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Descargar Dataset Histórico (.CSV)",
