@@ -165,7 +165,7 @@ if not st.session_state.login:
 # 5. LÓGICA DE FÍSICA Y TIEMPO REAL
 # ==========================================
 if st.session_state.sim_active:
-    time.sleep(0.5) # ESTABILIZADOR DE INTERFAZ HUMANA
+    time.sleep(1.0) # ESTABILIZADOR INCREMENTADO: Menos recargas por segundo, más estabilidad
     
     now = time.time()
     dt_real = now - st.session_state.last_time
@@ -181,26 +181,17 @@ if st.session_state.sim_active:
         if random.random() < 0.1: 
             m['perturbacion'] = random.uniform(0.9, 1.1)
 
-        # 1. DINÁMICA DE FLUJO Y NIVEL (Flujos ajustados y balance estricto)
+        # Llenado y vaciado (Constantes de flujo ajustadas para control humano)
         flujo_in_agua = (v['v_agua'] / 100.0) * 0.15 * m['perturbacion'] * dt_sim
         flujo_in_conc = (v['v_conc'] / 100.0) * 0.05 * m['perturbacion'] * dt_sim
         flujo_out = (v['bpm'] / 60.0) * 0.5 * dt_sim if v['banda'] and v['nivel'] > 0 else 0
         
-        # Balance de masa
         v['masa_agua'] += flujo_in_agua - (flujo_out * (v['masa_agua']/(v['nivel']+0.1)))
         v['masa_conc'] += flujo_in_conc - (flujo_out * (v['masa_conc']/(v['nivel']+0.1)))
         
-        # Limpieza absoluta de masas negativas
-        if v['masa_agua'] < 0: v['masa_agua'] = 0.0
-        if v['masa_conc'] < 0: v['masa_conc'] = 0.0
-        
+        v['masa_agua'] = max(0.0, v['masa_agua'])
+        v['masa_conc'] = max(0.0, v['masa_conc'])
         v['nivel'] = v['masa_agua'] + v['masa_conc']
-        
-        # Seguro anti-vacío absoluto
-        if v['nivel'] <= 0.1:
-             v['nivel'] = 0.0
-             v['masa_agua'] = 0.0
-             v['masa_conc'] = 0.0
         
         # Alarma de desborde
         if v['nivel'] > 100:
@@ -211,25 +202,25 @@ if st.session_state.sim_active:
             v['masa_agua'] = 100.0 * prop_agua
             v['masa_conc'] = 100.0 * prop_conc
 
-        # 2. LÓGICA DE CALIDAD (BRIX) - Tope cero añadido
+        # Lógica Brix (Seguro contra negativos y divisiones inestables)
         if v['nivel'] > 0.1:
             brix_teorico = (v['masa_conc'] / v['nivel']) * 60.0
             if v['agitador']:
                 v['brix'] += (brix_teorico - v['brix']) * 0.1 * dt_sim
         else:
-            v['brix'] -= 0.5 * dt_sim # El sensor cae rápidamente a cero si no hay líquido
-        
-        # FORZADO DE BRIX: Nunca puede ser menor a 0.0
-        if v['brix'] < 0.0:
+            v['brix'] = 0.0 # Se fuerza a cero si el tanque está vacío
+            
+        # Seguro anti-negativos definitivo
+        if v['brix'] < 0:
             v['brix'] = 0.0
 
-        # 3. LÓGICA TÉRMICA
+        # Lógica de calor
         calor_in = (v['v_vapor'] / 100.0) * 10.0 * dt_sim
         perdida_calor = ((v['temp'] - 25.0) * 0.05 + flujo_out * 1.5) * dt_sim
         v['temp'] += calor_in - perdida_calor
         v['temp'] = min(150.0, max(25.0, v['temp']))
 
-        # 4. ACUMULACIÓN DE PRODUCCIÓN EXACTA
+        # Acumulación de producción exacta
         if v['banda'] and v['bpm'] > 0:
             prod_actual = (v['bpm'] / 60.0) * dt_sim
             if v['nivel'] <= 0:
@@ -243,9 +234,10 @@ if st.session_state.sim_active:
         else:
             m['t_paro'] += dt_sim
 
-        # 5. REGISTRO HISTÓRICO TIME-SERIES PARA POWER BI (Cada 2 segundos)
+        # REGISTRO HISTÓRICO TIME-SERIES PARA ANÁLISIS EN POWER BI
         current_sec = int(st.session_state.tiempo_simulado)
-        if current_sec % 2 == 0 and current_sec != st.session_state.last_log_time:
+        # Cambio: Registramos en un rango de tiempo mayor (cada 10 segundos simulados) para no saturar el historial
+        if current_sec % 10 == 0 and current_sec != st.session_state.last_log_time:
             st.session_state.last_log_time = current_sec
             st.session_state.historico.append({
                 "Timestamp_Real": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
