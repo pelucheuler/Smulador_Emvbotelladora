@@ -207,7 +207,7 @@ if st.session_state.sim_active:
             v['masa_conc'] = 100.0 * prop_conc
 
         # Lógica Brix
-        if v['nivel'] > 0.1:
+        if v['nivel'] > 0.05:
             brix_teorico = (v['masa_conc'] / v['nivel']) * 60.0
             if v['agitador']:
                 v['brix'] += (brix_teorico - v['brix']) * 0.1 * dt_sim
