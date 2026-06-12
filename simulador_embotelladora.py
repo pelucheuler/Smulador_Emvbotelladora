@@ -22,13 +22,15 @@ st.markdown("""
 # ==========================================
 # 1. INTEGRACIÓN POWER BI WEB (API STREAMING)
 # ==========================================
-POWER_BI_API_URL = "" 
+# ⚠️ COLOQUE AQUÍ SU URL DE ENLACE DE POWER BI EN MEDIO DE LAS COMILLAS
+POWER_BI_API_URL = "https://api.powerbi.com/beta/cbc2c381-2f2e-4d93-91d1-506c9316ace7/datasets/db1ae21f-a07e-4271-bb5a-87f5d19fa2e5/rows?experience=power-bi&key=pBUJTu3wvzcM%2BD4TLzWgxDWmmGFLNIO8qrChRqINq5%2FsBGjxDt%2BN%2BOOXpex%2F8EyriILQMYrkqMmsE4SuMIPmyw%3D%3D" 
 
 def push_to_power_bi(data_dict):
     if not POWER_BI_API_URL: return
     try:
         payload = [{
             "Fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "Operador": str(st.session_state.nombre),  # Envía el nombre del alumno
             "OEE": float(data_dict['oee']),
             "Brix": float(data_dict['brix']),
             "Temp": float(data_dict['temp']),
@@ -198,8 +200,6 @@ if st.session_state.sim_active:
     m = st.session_state.metrics
 
     if v['main_pwr']:
-        if random.random() < 0.1: m['perturbacion'] = random.uniform(0.9, 1.1)
-
         flujo_in_agua = (v['v_agua'] / 100.0) * 1.5 * dt_sim
         flujo_in_conc = (v['v_conc'] / 100.0) * 0.5 * dt_sim
         
@@ -325,9 +325,13 @@ col_ind3.metric("Calidad", f"{cal*100:.1f}%")
 col_ind4.metric("OEE Global", f"{oee_live:.1f}%", f"{oee_live - 85.0:.1f}% vs Meta (85%)")
 
 # ==========================================
-# BUCLE DE REFRESCO
+# BUCLE DE REFRESCO CON DISPARADOR POWER BI
 # ==========================================
 if st.session_state.sim_active:
+    # Envía datos reales a Power BI en cada ciclo automático
+    if v['main_pwr']:
+        push_to_power_bi({'oee': oee_live, 'brix': v['brix'], 'temp': v['temp'], 'ok': m['ok'], 'malas': m['malas']})
+        
     time.sleep(2.0)
     st.rerun()
 else:
