@@ -30,12 +30,14 @@ def push_to_power_bi(data_dict):
     try:
         payload = [{
             "Fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-            "Operador": str(st.session_state.nombre),  # Envía el nombre del alumno
+            "Operador": str(st.session_state.nombre),
             "OEE": float(data_dict['oee']),
             "Brix": float(data_dict['brix']),
             "Temp": float(data_dict['temp']),
             "Botellas_OK": int(data_dict['ok']),
-            "Defectos": int(data_dict['malas'])
+            "Defectos": int(data_dict['malas']),
+            "Fallos_Op": int(data_dict['fallos']),   # <-- LÍNEA NUEVA
+            "Errores_Seg": int(data_dict['errores']) # <-- LÍNEA NUEVA
         }]
         headers = {"Content-Type": "application/json"}
         requests.post(POWER_BI_API_URL, data=json.dumps(payload), headers=headers, timeout=1)
@@ -330,7 +332,11 @@ col_ind4.metric("OEE Global", f"{oee_live:.1f}%", f"{oee_live - 85.0:.1f}% vs Me
 if st.session_state.sim_active:
     # Envía datos reales a Power BI en cada ciclo automático
     if v['main_pwr']:
-        push_to_power_bi({'oee': oee_live, 'brix': v['brix'], 'temp': v['temp'], 'ok': m['ok'], 'malas': m['malas']})
+        push_to_power_bi({
+            'oee': oee_live, 'brix': v['brix'], 'temp': v['temp'], 
+            'ok': m['ok'], 'malas': m['malas'],
+            'fallos': m['op_fallos'], 'errores': m['seg_fallos']  # <-- LÍNEA NUEVA
+        })
         
     time.sleep(2.0)
     st.rerun()
